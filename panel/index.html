@@ -63,13 +63,16 @@
 <main>
   <section>
     <h2>Матч</h2>
+    <p class="muted" id="modeNote" style="margin:-4px 0 12px"></p>
     <div class="grid">
-      <button class="primary" data-cmd="mp_warmup_end" data-say="Матч начат">Начать матч</button>
-      <button data-cmd="mp_pause_match" data-say="Пауза включится в начале следующего раунда">Пауза</button>
-      <button data-cmd="mp_unpause_match" data-say="Пауза снята">Снять паузу</button>
-      <button data-cmd="mp_warmup_start" data-confirm="Вернуть разминку? Текущий матч прервётся.">Вернуть разминку</button>
+      <button class="primary" data-cmd="mp_warmup_end" data-mz="css_start" data-say="Матч начат" data-confirm="Начать матч, не дожидаясь !ready от всех?">Начать матч</button>
+      <button data-cmd="mp_pause_match" data-mz="css_forcepause" data-say="Пауза включится в начале следующего раунда">Пауза</button>
+      <button data-cmd="mp_unpause_match" data-mz="css_forceunpause" data-say="Пауза снята">Снять паузу</button>
+      <button data-cmd="mp_warmup_start" data-mz="css_restart" data-confirm="Сбросить матч и вернуть разминку? Счёт обнулится.">Сбросить в разминку</button>
       <button data-cmd="mp_swapteams" data-confirm="Поменять команды сторонами?">Поменять стороны</button>
-      <button class="danger" data-cmd="mp_restartgame 1" data-confirm="Перезапустить матч? Счёт обнулится.">Рестарт матча</button>
+      <button class="danger" data-cmd="mp_restartgame 1" data-mz="" data-confirm="Перезапустить матч? Счёт обнулится.">Рестарт матча</button>
+      <button data-mz="css_roundknife" hidden>Нож-раунд вкл/выкл</button>
+      <button data-mz="restore" hidden>Откатить раунд…</button>
     </div>
   </section>
 
@@ -156,6 +159,7 @@ async function refresh() {
   try { s = await api('/api/status'); } catch (e) { return setOnline(false, e.message === 'Неверный пароль' ? 'нужен пароль' : 'панель не отвечает'); }
   if (!s.online) { setOnline(false, s.error || 'сервер не запущен'); $('map').textContent = '—'; $('count').textContent = '—'; return; }
   setOnline(true, 'сервер работает');
+  if (s.matchzy !== matchzy) { matchzy = s.matchzy; applyMode(); }
   $('map').textContent = s.map || '—';
   const people = s.players.filter((p) => p.name !== 'SourceTV' && !/GOTV/i.test(p.name));
   const humans = people.filter((p) => !p.bot).length;
@@ -181,9 +185,27 @@ for (const [id, name] of MAPS) {
   b.onclick = () => confirm(`Сменить карту на ${name}? Текущий матч прервётся, всех перекинет на новую карту.`) && run('changelevel ' + id, 'Меняю карту…');
   $('maps').append(b);
 }
-document.querySelectorAll('button[data-cmd]').forEach((b) => {
-  b.onclick = () => (!b.dataset.confirm || confirm(b.dataset.confirm)) && run(b.dataset.cmd, b.dataset.say);
+let matchzy = false;
+// С MatchZy берём data-mz (пусто = кнопка не нужна), без него - data-cmd (нет = кнопка только для MatchZy).
+const cmdOf = (b) => (matchzy && 'mz' in b.dataset ? b.dataset.mz : b.dataset.cmd);
+function applyMode() {
+  document.querySelectorAll('button[data-cmd], button[data-mz]').forEach((b) => (b.hidden = !cmdOf(b)));
+  $('modeNote').textContent = matchzy
+    ? 'Режим MatchZy: игроки пишут !ready, после разминки нож-раунд. «Начать матч» — старт без ожидания !ready.'
+    : 'Без модов: матч начинается кнопкой «Начать матч».';
+}
+document.querySelectorAll('button[data-cmd], button[data-mz]').forEach((b) => {
+  b.onclick = () => {
+    const cmd = cmdOf(b);
+    if (cmd === 'restore') {
+      const n = prompt('Откатить на начало какого раунда? (номер раунда)');
+      if (n && /^\d+$/.test(n.trim())) run('css_restore ' + n.trim(), 'Раунд восстановлен');
+      return;
+    }
+    if (!b.dataset.confirm || confirm(b.dataset.confirm)) run(cmd, b.dataset.say);
+  };
 });
+applyMode();
 $('cmdForm').onsubmit = (e) => { e.preventDefault(); const v = $('cmd').value.trim(); if (v) { run(v); $('cmd').value = ''; } };
 $('loginForm').onsubmit = async (e) => {
   e.preventDefault();

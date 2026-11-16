@@ -9,6 +9,7 @@ const crypto = require('crypto');
 
 const ROOT = path.join(__dirname, '..');
 const PANEL_PORT = Number(process.env.PANEL_PORT) || 8080;
+let detectedIp = null; // кэш: detect-ip.ps1 запускаем один раз
 
 // Настройки берём из тех же файлов, что и сервер, чтобы не было второго места с паролем и IP.
 function readConfig() {
@@ -20,8 +21,12 @@ function readConfig() {
     return m[1];
   };
   // panel.bat вызывает settings.bat, поэтому уже определённый IP (SERVER_IP=auto) приходит через окружение.
-  const host = process.env.SERVER_IP || get(/^set "SERVER_IP=([^"]+)"/m, settings, 'SERVER_IP в settings.bat');
-  if (host === 'auto') throw new Error('IP сервера не определён: запускайте панель через panel.bat');
+  let host = process.env.SERVER_IP || get(/^set "SERVER_IP=([^"]+)"/m, settings, 'SERVER_IP в settings.bat');
+  if (host === 'auto') {
+    detectedIp ??= require('child_process').execFileSync('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(ROOT, 'detect-ip.ps1')], { encoding: 'utf8' }).trim();
+    host = detectedIp;
+  }
+  if (!host) throw new Error('Не удалось определить IP сервера: впишите его в settings.bat');
   return {
     host,
     port: Number(process.env.GAME_PORT || get(/^set "GAME_PORT=(\d+)"/m, settings, 'GAME_PORT в settings.bat')),
@@ -128,7 +133,10 @@ async function handle(req, res) {
 
   try {
     if (req.method === 'GET' && req.url === '/api/status') {
-      return send(res, 200, { online: true, ...parseStatus(await rcon('status', conf)) });
+      const status = parseStatus(await rcon('status', conf));
+      // С MatchZy кнопки матча шлют его команды (css_start и т.д.), без него - обычные mp_*.
+      const matchzy = /"MatchZy"/.test(await rcon('css_plugins list', conf).catch(() => ''));
+      return send(res, 200, { online: true, matchzy, ...status });
     }
     if (req.method === 'POST' && req.url === '/api/cmd') {
       const { cmd } = JSON.parse(await readBody(req));
