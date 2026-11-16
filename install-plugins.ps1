@@ -45,20 +45,27 @@ try {
     $mmName = $mmName.Trim()
     if ($mmName -notmatch '^mmsource-[\w.\-]+-windows\.zip$') { throw "Неожиданный ответ сайта Metamod: $mmName" }
 
-    $rel = Invoke-RestMethod 'https://api.github.com/repos/shobhit-pathak/MatchZy/releases/latest' -Headers @{ 'User-Agent' = 'cs2-lan-kit' }
-    $mz = $rel.assets | Where-Object name -like '*-with-cssharp-windows.zip' | Select-Object -First 1
-    if (-not $mz) { throw 'В свежем релизе MatchZy нет сборки для Windows' }
+    $gh = @{ 'User-Agent' = 'cs2-lan-kit' }
+    # CounterStrikeSharp ставим отдельно, самый свежий: версия из комплекта MatchZy бывает старше CS2 и роняет сервер.
+    $css = Invoke-RestMethod 'https://api.github.com/repos/roflmuffin/CounterStrikeSharp/releases/latest' -Headers $gh
+    $cssZip = $css.assets | Where-Object name -like 'counterstrikesharp-with-runtime-windows-*.zip' | Select-Object -First 1
+    $rel = Invoke-RestMethod 'https://api.github.com/repos/shobhit-pathak/MatchZy/releases/latest' -Headers $gh
+    $mz = $rel.assets | Where-Object { $_.name -match '^MatchZy-[\d.]+\.zip$' } | Select-Object -First 1
+    if (-not $cssZip -or -not $mz) { throw 'Не нашёл архивы CounterStrikeSharp/MatchZy для Windows в свежих релизах' }
 
     Write-Host "Скачиваю $mmName ..."
     Invoke-WebRequest "https://mms.alliedmods.net/mmsdrop/2.0/$mmName" -OutFile "$tmp\mm.zip" -UseBasicParsing
-    Write-Host "Скачиваю $($mz.name) (MatchZy $($rel.tag_name) + CounterStrikeSharp, ~70 МБ) ..."
+    Write-Host "Скачиваю CounterStrikeSharp $($css.tag_name) (~50 МБ) ..."
+    Invoke-WebRequest $cssZip.browser_download_url -OutFile "$tmp\css.zip" -UseBasicParsing
+    Write-Host "Скачиваю MatchZy $($rel.tag_name) ..."
     Invoke-WebRequest $mz.browser_download_url -OutFile "$tmp\mz.zip" -UseBasicParsing
 
     Write-Host "Распаковываю в $csgo ..."
     Expand-Archive "$tmp\mm.zip" $csgo -Force
+    Expand-Archive "$tmp\css.zip" $csgo -Force
     Expand-Archive "$tmp\mz.zip" $csgo -Force
     Set-Metamod $true
-    Write-Host "Готово: Metamod $mmName, MatchZy $($rel.tag_name). Запускайте start-server.bat." -ForegroundColor Green
+    Write-Host "Готово: $mmName, CounterStrikeSharp $($css.tag_name), MatchZy $($rel.tag_name). Запускайте start-server.bat." -ForegroundColor Green
 } catch {
     Write-Host "ОШИБКА: $($_.Exception.Message)" -ForegroundColor Red; exit 1
 } finally {
