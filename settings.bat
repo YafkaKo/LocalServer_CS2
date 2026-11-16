@@ -16,6 +16,7 @@ set "TV_PORT=27020"
 rem 10 игроков + комментатор + запас
 set "MAX_PLAYERS=14"
 
-rem IP этого ПК в сети арены. Если IP сменится (см. список при запуске start-server.bat), поменяйте здесь.
-rem Без него сервер вешает rcon на адрес WSL и управление из игры не работает.
-set "SERVER_IP=192.168.0.100"
+rem IP этого ПК в сети арены. auto = определить самому (проводная сеть, потом Wi-Fi; WSL и VPN не берутся).
+rem Если определился не тот адрес, впишите нужный вручную, например: set "SERVER_IP=192.168.0.100"
+set "SERVER_IP=auto"
+if "%SERVER_IP%"=="auto" for /f "delims=" %%i in ('powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0detect-ip.ps1"') do set "SERVER_IP=%%i"
