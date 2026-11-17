@@ -84,8 +84,8 @@
   <section>
     <h2>Боты (для проверки)</h2>
     <div class="grid">
-      <button data-cmd="bot_add_t">+ бот за T</button>
-      <button data-cmd="bot_add_ct">+ бот за CT</button>
+      <button data-bot="t">+ бот за T</button>
+      <button data-bot="ct">+ бот за CT</button>
       <button data-cmd="bot_quota 0; bot_kick" data-say="Боты убраны">Убрать всех ботов</button>
     </div>
   </section>
@@ -163,6 +163,7 @@ async function refresh() {
   $('map').textContent = s.map || '—';
   const people = s.players.filter((p) => p.name !== 'SourceTV' && !/GOTV/i.test(p.name));
   const humans = people.filter((p) => !p.bot).length;
+  botCount = people.length - humans;
   $('count').textContent = `${humans}` + (people.length > humans ? ` + ${people.length - humans} бот.` : '');
   document.querySelectorAll('#maps button').forEach((b) => b.classList.toggle('current', b.dataset.map === s.map));
   const tbody = $('players');
@@ -186,6 +187,11 @@ for (const [id, name] of MAPS) {
   $('maps').append(b);
 }
 let matchzy = false;
+let botCount = 0;
+// bot_add в CS2 поднимает bot_quota сразу на 2 (добавляется два бота), поэтому задаём точное число.
+document.querySelectorAll('button[data-bot]').forEach((b) => {
+  b.onclick = () => run(`bot_join_team ${b.dataset.bot}; bot_quota_mode normal; bot_quota ${botCount + 1}`, 'Бот добавлен');
+});
 // С MatchZy берём data-mz (пусто = кнопка не нужна), без него - data-cmd (нет = кнопка только для MatchZy).
 const cmdOf = (b) => (matchzy && 'mz' in b.dataset ? b.dataset.mz : b.dataset.cmd);
 function applyMode() {
